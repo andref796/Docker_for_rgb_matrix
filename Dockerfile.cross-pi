@@ -1,0 +1,45 @@
+# Dockerfile.cross-pi
+FROM cross-stretch
+
+# NOTE: These versions must be the same on the target host
+ENV RPI_SHA=f73fca0
+ENV WIRINGPI_SHA=6d9ce35
+
+# MMAL/VCOS (https://github.com/raspberrypi/userland)
+RUN RPI_DIR=/raspberrypi && \
+  RPI_BUILD_DIR=$RPI_DIR/build/arm-linux/release && \
+  git clone --single-branch --branch master https://github.com/raspberrypi/userland.git $RPI_DIR && \
+  cd $RPI_DIR && \
+  git checkout $RPI_SHA && \
+  mkdir -p $RPI_BUILD_DIR && \
+  cd $RPI_BUILD_DIR && \
+  cmake -DCMAKE_TOOLCHAIN_FILE=../../../makefiles/cmake/toolchains/arm-linux-gnueabihf.cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    ../../.. && \
+  make -j `nproc` && \
+  make install DESTDIR=$CROSS_INSTALL_PREFIX/ && \
+  cd / && \
+  rm -rf $RPI_DIR && \
+  # WiringPi
+  # https://github.com/WiringPi/WiringPi
+  WPI_DIR=/wpi && \
+  WPI_WIRING_PI_DIR=$WPI_DIR/wiringPi && \
+  git clone --single-branch --branch master https://github.com/WiringPi/WiringPi.git $WPI_DIR && \
+  cd $WPI_DIR && \
+  git checkout $WIRINGPI_SHA && \
+  cd $WPI_WIRING_PI_DIR && \
+  CC=$C_COMPILER_ARM_LINUX make -j `nproc` && \
+  make install DESTDIR=$CROSS_INSTALL_PREFIX PREFIX="" && \
+  cd / && \
+  rm -rf $WPI_DIR &&\
+
+  wget http://ports.ubuntu.com/pool/universe/i/i2c-tools/libi2c-dev_4.0-2_armhf.deb && \
+  dpkg -x libi2c-dev_4.0-2_armhf.deb . && \
+  cd usr && \
+  mkdir $CROSS_INSTALL_PREFIX/include/i2c && \
+  install -m 0755 -d $CROSS_INSTALL_PREFIX/include/i2c &&\
+  install -m 0644 include/i2c/smbus.h $CROSS_INSTALL_PREFIX/include/i2c && \
+  install -m 0755 -d /usr/arm-linux-gnueabihf/lib/ && \
+  install -m 0755 -d /lib/arm-linux-gnueabihf/libi2c.so.0 /usr/arm-linux-gnueabihf/lib/libi2c.so.0 && \
+  ln -sf $CROSS_INSTALL_PREFIX/lib/libi2c.so.0 $CROSS_INSTALL_PREFIX/lib/libi2c.so && \
+  ldconfig
